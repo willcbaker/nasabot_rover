@@ -1,0 +1,200 @@
+#!/usr/bin/env python
+
+#Created by William Baker: VSGC GRA 2015
+#this is a GUI for camera views and controller input, with additional buttons and stuff for later use
+#must run as root
+#sudo su
+
+
+import rospy, math
+from sensor_msgs.msg import Joy
+from std_msgs.msg import Byte, ByteMultiArray, Int16, UInt16MultiArray, MultiArrayDimension
+
+WIRELESS_CONTROLLER=True
+			
+#axis 0: (Left-x)  	steering
+#axis 1: (left-y) 	N/A
+#axis 2: (right-x)	web-x
+#axis 3: (right-y)	web-y
+#axis 4: (RT)		drive
+#button 5: (RB)		reverse
+#axis 6: (D-x)		kinect-x
+#axis 7: (D-y)		kinect-y
+BUTTON_A = 0
+BUTTON_B = 1
+BUTTON_X = 2
+BUTTON_Y = 3
+BUTTON_RB = 5
+BUTTON_LB = 4
+BUTTON_BACK = 6
+BUTTON_START = 7
+BUTTON_POWER = 8
+BUTTON_RS = 9
+BUTTON_LS = 10
+
+if(WIRELESS_CONTROLLER):
+	AXIS_X1 = 0
+	AXIS_Y1 = 1
+	AXIS_X2 = 2
+	AXIS_Y2 = 3
+	AXIS_RT = 4
+	AXIS_LT = 5
+	AXIS_DX = 6
+	AXIS_DY = 7
+else:#(WIRED_CONTROLLER):
+	AXIS_X1 = 0
+	AXIS_Y1 = 1
+	AXIS_X2 = 3
+	AXIS_Y2 = 4
+	AXIS_RT = 5
+	AXIS_LT = 2
+	AXIS_DX = 6
+	AXIS_DY = 7
+
+CAM_PAN = 0
+CAM_TILT = 1
+
+KINECT = 0
+WEBCAM = 1
+STEERING = 2
+DRIVING = 3
+
+DEFAULT_DRIVING = 50
+DEFAULT_STEERING = 50
+DEFAULT_KINECT_PAN=50
+DEFAULT_KINECT_TILT=55
+DEFAULT_WEBCAM_PAN=50
+DEFAULT_WEBCAM_TILT=50
+
+DEADZONE = 0.08
+
+#basic function to scale values from input range to output range
+def scale(x, in_min, in_max, out_min, out_max):
+	value = (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+	return value#constrain(value,out_min,out_max)
+	
+def constrain(value, out_min,out_max):
+	value = min(value,out_max)
+	value = max(value, out_min)
+	return value
+	
+class NasaBot():
+	def __init__(self,deadzone = 0.05, axes_gain = [1,1,-5,5,1,1,-5,5] ):
+		self.joy_sub = rospy.Subscriber('joy', Joy , self.callback_joystick, queue_size=10)
+		
+		#"/nasabot/throttle", throttleMSG );
+		#"/nasabot/steering", steeringMSG );
+		#"/nasabot/leds", ledsMSG );
+		#"/nasabot/kinect/control", kinectMSG );
+		#"/nasabot/webcam/control", webcamMSG );
+		#publishers
+		self.throttle_pub = rospy.Publisher('throttle', Int16, queue_size=10)
+		self.steering_pub = rospy.Publisher('steering', Int16, queue_size=10)
+		self.leds_pub = rospy.Publisher('leds', UInt16MultiArray, queue_size=10)
+		self.kinect_pub = rospy.Publisher('kinect/control', UInt16MultiArray, queue_size=10)
+		self.webcam_pub = rospy.Publisher('webcam/control', UInt16MultiArray, queue_size=10)
+		
+		self.panTilt_msg = UInt16MultiArray()
+		self.panTilt_msg.layout.dim = [MultiArrayDimension('data',1,2)]
+		
+		self.deadzone = deadzone
+		self.axes_gain=axes_gain
+		
+		self.kinect   = [DEFAULT_KINECT_PAN,DEFAULT_KINECT_TILT]
+		self.webcam   = [DEFAULT_WEBCAM_PAN,DEFAULT_WEBCAM_TILT]
+		self.steering = DEFAULT_STEERING
+		self.driving  = DEFAULT_DRIVING
+		self.delta = [(0,0),(0,0),0,0]#KINECT,WEBCAM,STEERING,DRIVING
+		self.ready = False
+		#self.leds = [0,0,0]
+		self.last = [self.kinect,self.webcam,self.steering,self.driving]
+	def callback_joystick(self,message):
+		#rospy.loginfo('Joystick Message')
+		'''
+		if message.buttons[BUTTON_A]:
+			self.next_sphero()
+		if message.buttons[1]:
+			self.active_sphero.set_heading(90)
+		if message.buttons[2]:
+			self.active_sphero.set_heading(270)
+		if message.buttons[3]:
+			self.active_sphero.set_angular_velocity(200)
+		'''
+		axes = []#
+		#print 'ax:',message.axes
+		buttons = message.buttons
+		for axis in message.axes:
+			axes.append(self.apply_deadzone(axis))
+		#print 'ax2:',axes
+		if not self.ready and axes[AXIS_RT] > 0:
+			self.ready = True#
+		#axis 0: (Left-x)  	steering
+		self.delta[STEERING] = scale(axes[AXIS_X1],-1,1,0,100)
+		
+		#axis 1: (left-y) 	N/A
+		
+		#axis 2: (right-x)	web-x
+		#axis 3: (right-y)	web-y
+		self.delta[WEBCAM] = (scale(axes[AXIS_X2],-1,1,-self.axes_gain[AXIS_X2],self.axes_gain[AXIS_X2]),
+			scale(axes[AXIS_Y2],-1,1,-self.axes_gain[AXIS_Y2],self.axes_gain[AXIS_Y2]))
+		#axis 4: (RT)		forward
+		#axis 5: (LT)		backward
+		self.delta[DRIVING] = scale(axes[AXIS_RT],1,-1,0,255)
+		if buttons[BUTTON_RB]:
+			self.delta[DRIVING]*=-1
+		#rospy.loginfo("[%d]=Driving_Delta: %d"%(axes[AXIS_RT],self.delta[DRIVING]))
+		#axis 6: (D-x)		kinect-x
+		#axis 7: (D-y)		kinect-y
+		
+		self.delta[KINECT] = (scale(axes[6],-1,1,-self.axes_gain[6],self.axes_gain[6]),
+			scale(axes[7],-1,1,-self.axes_gain[7],self.axes_gain[7]))
+			
+		send_kinect = False
+		send_webcam = False
+		if self.delta[KINECT][CAM_PAN]:
+			self.kinect[CAM_PAN] = constrain(self.kinect[CAM_PAN] + self.delta[KINECT][CAM_PAN],0,100)
+			send_kinect = True
+		if self.delta[KINECT][CAM_TILT]:
+			self.kinect[CAM_TILT] = constrain(self.kinect[CAM_TILT] + self.delta[KINECT][CAM_TILT],0,100)
+			send_kinect = True
+		if self.delta[WEBCAM][CAM_PAN]:
+			self.webcam[CAM_PAN] = constrain(self.webcam[CAM_PAN] + self.delta[WEBCAM][CAM_PAN],0,100)
+			send_webcam = True
+		if self.delta[WEBCAM][CAM_TILT]:
+			self.webcam[CAM_TILT] = constrain(self.webcam[CAM_TILT] + self.delta[WEBCAM][CAM_TILT],0,100)
+			send_webcam = True
+		
+		if send_kinect:
+			self.panTilt_msg.data = self.kinect
+			self.kinect_pub.publish(self.panTilt_msg)
+		if send_webcam:
+			self.panTilt_msg.data = self.webcam
+			self.webcam_pub.publish(self.panTilt_msg)
+		if self.delta[STEERING] != self.steering:
+			self.steering = self.delta[STEERING]
+			self.steering_pub.publish(self.steering)
+		#ALWAYS SEND THROTTLE #if self.delta[DRIVING] != self.driving:
+		self.driving = self.delta[DRIVING]
+		if self.ready:
+			self.throttle_pub.publish(self.driving)
+		#print 'delta:',self.delta
+	def update(self):
+		if self.ready:
+			self.throttle_pub.publish(self.driving)
+		
+	def apply_deadzone(self,val):
+		if val > 0 and val > self.deadzone:
+			return val
+		if val < 0 and val < -self.deadzone:
+			return val
+		return 0
+        
+if __name__ == '__main__':
+	rospy.init_node('joystick_control')
+
+	bot = NasaBot(DEADZONE)
+	r = rospy.Rate(4) # 10hz
+	while not rospy.is_shutdown():
+		bot.update()
+   		r.sleep()
+   	rospy.spin()

@@ -1,0 +1,4 @@
+string topic
+int16 wait
+---
+bool available

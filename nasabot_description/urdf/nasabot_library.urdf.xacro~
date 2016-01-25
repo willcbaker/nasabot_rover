@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!--
+  The complete nasa-bot library of xacros for easy reference
+ -->
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- General -->
+  <xacro:include filename="$(find nasabot_description)/urdf/common_properties.urdf.xacro"/>
+  <!--xacro:include filename="$(find nasabot_description)/urdf/nasabot_properties.urdf.xacro"/-->
+  <!-- Bodies -->
+  <xacro:include filename="$(find nasabot_description)/urdf/nasabot_chassis.urdf.xacro"/>
+  <!-- 3D Sensors -->
+  <xacro:include filename="$(find nasabot_description)/urdf/kinect.urdf.xacro"/>
+</robot>

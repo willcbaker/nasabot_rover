@@ -1,0 +1,26 @@
+<launch>
+
+	<arg name="model" default="$(find nasabot_description)/robot.urdf.xacro" />
+	<arg name="gui" default="True" />
+	<param name="robot_description" command="$(find xacro)/xacro.py $(arg model)" />
+	<param name="use_gui" value="$(arg gui)"/>
+	
+	<param name="twist_range_low" value="-1"/>
+	<param name="twist_range_high" value="1"/>
+	
+	<node pkg="nasabot_teleop" type="nasabot_teleop_key.py" name="nasabot_teleop_key" output="screen">
+		<remap from="nasabot_teleop_key/cmd_vel" to="nasabot/twist"/>
+		<remap from="nasabot_teleop_key/kinect/control" to="nasabot/kinect/control"/>
+		<remap from="nasabot_teleop_key/webacm/control" to="nasabot/webacm/control"/>
+	</node>
+	
+	<node pkg="rosserial_python" type="serial_node.py" name="serial_node" ns="nasabot" output="screen" respawn="true">
+		<param name="~baud"  value="115200" />
+	</node>
+	
+	<node pkg="nasabot_teleop" type="bot_twister.py" name="bot_twister" ns="nasabot" respawn="true">
+		<param name="_min_speed_out"  value="100" />
+		<param name="_max_speed_out"  value="255" />
+	</node>
+
+</launch>

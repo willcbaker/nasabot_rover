@@ -1,0 +1,273 @@
+<?xml version="1.0"?>
+<robot name="nasabot_chassis" xmlns:xacro="http://ros.org/wiki/xacro">
+
+  <!-- Wheels -->
+  <property name="wheel_radius" value="0.07" /> 
+  <property name="wheel_height" value="0.09" />
+  <property name="wheel_mass" value="0.25" /> <!-- in kg-->
+  
+  
+  <property name="kinect_panmin" value="${-M_PI/2}" />
+  <property name="kinect_panmax" value="${M_PI/2}" />
+  <property name="kinect_tiltmin" value="-0.8" />
+  <property name="kinect_tiltmax" value="0.85" />
+  <property name="usb_panmin" value="${-M_PI/2}" />
+  <property name="usb_panmax" value="${M_PI/2}" />
+  <property name="usb_tiltmin" value="-.6" />
+  <property name="usb_tiltmax" value="0.25" />
+  
+  <property name="steermin" value="${-M_PI/8}" />
+  <property name="steermax" value="${M_PI/8}" />
+ 
+  <property name="base_x_origin_to_wheel_origin" value="0.16" />
+  <property name="base_y_origin_to_wheel_origin" value="0.145" />
+  <property name="base_z_origin_to_wheel_origin" value="${wheel_radius}" />
+ 
+ 
+  <xacro:macro name="wheel" params="fb lr parent translateX translateY flipY"> <!--fb : front, back ; lr: left, right -->
+    <link name="${fb}_${lr}_wheel">
+      <visual>
+        <origin xyz="0 0 0" rpy="${flipY*M_PI/2} 0 0" /> 
+        <geometry>
+          <cylinder length="${wheel_height}" radius="${wheel_radius}" />
+        </geometry>
+        <xacro:material_black/>
+      </visual>
+    </link>
+ 
+ 
+    <joint name="${fb}_${lr}_wheel_joint" type="continuous">
+      <parent link="${parent}"/>
+      <child link="${fb}_${lr}_wheel"/>
+      <origin xyz="${translateX * base_x_origin_to_wheel_origin} ${translateY * base_y_origin_to_wheel_origin} ${base_z_origin_to_wheel_origin}" rpy="0 0 0" /> 
+      <axis xyz="0 1 0" rpy="0 0 0" />
+      <limit effort="100" velocity="100"/>
+      <joint_properties damping="0.0" friction="0.0"/>
+    </joint>
+ 
+  </xacro:macro>
+   
+  
+  <xacro:macro name="wheels" params="parent"> <!--fb : front, back ; lr: left, right -->
+    
+    	   <link name="steering">
+	      <visual>
+		<origin xyz="0 0 ${wheel_radius}" rpy="${M_PI/2} 0 0 " /> 
+		<geometry>
+		  <cylinder length=".2" radius="0.01" />
+		</geometry>
+		<xacro:material_black/>
+	      </visual>
+    	   </link>
+    	   
+		<joint name="steering_joint" type="revolute">
+		    	<parent link="${parent}" />
+		    	<child link="steering" />
+		<origin xyz="${base_x_origin_to_wheel_origin} 0 0" rpy="0 0 0" />
+		    	<axis xyz="0 0 1" />
+		    	<limit lower="${steermin}" upper="${steermax}" effort="10" velocity="3" />
+		      	<dynamics damping="0.0"/>
+		</joint>
+		
+    	   <link name="rear_axle">
+	      <visual>
+		<origin xyz="0 0 ${wheel_radius}" rpy="${M_PI/2} 0 0" /> 
+		<geometry>
+		  <cylinder length=".2" radius="0.01" />
+		</geometry>
+		<xacro:material_orange/>
+	      </visual>
+    	   </link>
+    	   
+	<joint name="rear_axle_joint" type="fixed">
+    		<parent link="${parent}"/>
+    		<child link="rear_axle"/>
+		<origin xyz="{-base_x_origin_to_wheel_origin} 0 0.0" rpy="$0 0 0 "/>
+  	</joint>
+		
+	  <!-- WHEELs -->
+	  <wheel fb="front" lr="right" parent="steering" translateX="0" translateY="-1" flipY="-1"/>
+	  <wheel fb="front" lr="left" parent="steering" translateX="0" translateY="1" flipY="-1"/>
+	  <wheel fb="back" lr="right" parent="${parent}" translateX="-1" translateY="-1" flipY="-1"/>
+	  <wheel fb="back" lr="left" parent="${parent}" translateX="-1" translateY="1" flipY="-1"/>
+ 
+  </xacro:macro>
+  
+  <xacro:macro name="nasabot_standoff_3in" params="parent number x_loc y_loc z_loc">
+    <joint name="standoff_2in_${number}_joint" type="fixed">
+      <origin xyz="${x_loc} ${y_loc} ${z_loc}" rpy="0 0 0" />
+      <parent link="${parent}"/>
+      <child link="standoff_2in_${number}_link" />
+    </joint>
+
+    <link name="standoff_2in_${number}_link">
+      <inertial>
+        <mass value="0.001" />
+        <origin xyz="0 0 0" />
+        <inertia ixx="0.0001" ixy="0.0" ixz="0.0"
+          iyy="0.0001" iyz="0.0"
+          izz="0.0001" />
+      </inertial>
+
+      <visual>
+        <origin xyz=" 0 0 0 " rpy="0 0 0" />
+        <geometry>
+          <cylinder length="0.0762" radius="0.0381"/>
+        </geometry>
+      </visual>
+
+      <collision>
+        <origin xyz="0.0 0.0 0.0" rpy="0 0 0" />
+        <geometry>
+          <cylinder length="0.0762" radius="0.0381"/>
+        </geometry>
+      </collision>
+    </link>
+  </xacro:macro>
+
+  <xacro:macro name="pan_tilt" params="parent xyz prefix panmin panmax tiltmin tiltmax">
+  
+	<link name="${prefix}_pan">
+		<visual>
+		  <geometry>
+			<box size="0.1 .04 .06"/>
+		  </geometry>
+		  <origin rpy="0 0 0.0" xyz="0 0 0.03"/>
+			<xacro:material_black/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="0.1 .04 .06"/>
+			</geometry>
+		</collision>
+	</link>
+	
+  	<joint name="${prefix}_pan_connect" type="fixed">
+    	<parent link="${parent}" />
+    	<child link="${prefix}_pan" />
+    	<origin xyz="${xyz}" rpy="0 0 0" />
+	</joint>
+	
+	<link name="${prefix}_tilt">
+		<visual>
+		  <geometry>
+			<box size="0.1 .04 .06"/>
+		  </geometry>
+		  <origin rpy="${M_PI/2} 0 0.0" xyz="0 0 0.02"/>
+			<xacro:material_black/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="0.1 .04 .06"/>
+			</geometry>
+		</collision>
+	</link>
+	
+	<joint name="${prefix}_pan_joint" type="revolute">
+    	<parent link="${prefix}_pan" />
+    	<child link="${prefix}_tilt" />
+    	<origin xyz="0 0 0.06" rpy="0 0 0" />
+    	<axis xyz="0 0 1" />
+    	<limit lower="${panmin}" upper="${panmax}" effort="10" velocity="3" />
+      	<dynamics damping="0.0"/>
+	</joint>
+	
+	<link name="${prefix}_mount">
+		<visual>
+		  <geometry>
+			<box size="0.1 .05 .06"/>
+		  </geometry>
+		  <origin rpy="0 ${M_PI/2} 0.0" xyz="0 0 0.03"/>
+			<xacro:material_black/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="0.1 .04 .06"/>
+			</geometry>
+		</collision>
+	</link>
+	
+  	
+	
+	
+  	
+ 	<joint name="${prefix}_tilt_joint" type="revolute">
+    	<parent link="${prefix}_tilt" />
+    	<child link="${prefix}_mount" />
+    	<origin xyz="0.025 0 0.02" rpy="0 0 0" />
+    	<axis xyz="0 -1 0" />
+    	<limit lower="${tiltmin}" upper="${tiltmax}" effort="10" velocity="3" />
+      	<dynamics damping="0.0"/>
+	</joint>
+	
+  </xacro:macro>
+  <xacro:macro name="nasabot_chassis" params="parent">
+  
+  	<wheels parent="${parent}" />
+  	
+	<link name="${parent}">
+		<visual>
+		  <geometry>
+			<box size="0.42 .1 .1"/>
+		  </geometry>
+		  <origin rpy="0 0 0.0" xyz="0 0 ${wheel_radius+0.05}"/>
+			<xacro:material_dark_grey/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="0.3 .2 .1"/>
+			</geometry>
+		</collision>
+	</link>
+	
+	<link name="xbox">
+		<visual>
+		  <geometry>
+			<box size="0.28 .35 .08"/>
+		  </geometry>
+		  <origin rpy="0 0 0.0" xyz="0 0 0.04"/>
+			<xacro:material_dark_grey/>
+		</visual>
+		<collision>
+			<geometry>
+				<box size="0.28 .35 .185"/>
+			</geometry>
+		</collision>
+	</link>
+	
+	<joint name="joint0" type="fixed">
+    		<parent link="${parent}"/>
+    		<child link="xbox"/>
+		<origin rpy="0 0 0.0" xyz="0 0 ${wheel_radius + 0.1}"/>
+  	</joint>
+  	<pan_tilt parent="xbox" xyz="-.09 0 0.08" prefix="pt_kinect"
+  		panmin="${kinect_panmin}" panmax="${kinect_panmax}"
+  		tiltmin="${kinect_tiltmin}" tiltmax="${kinect_tiltmax}"/>
+  	<sensor_kinect parent="pt_kinect_mount"/>
+  	
+  	<pan_tilt parent="${parent}" xyz="0.25 0 ${wheel_radius+.05}" prefix="pt_usb"
+  		panmin="${usb_panmin}" panmax="${usb_panmax}"
+  		tiltmin="${usb_tiltmin}" tiltmax="${usb_tiltmax}"/>
+	<link name="usb_cam">
+		<visual>
+		  <geometry>
+			<cylinder length=".055" radius=".025"/>
+		  </geometry>
+		  <origin rpy="0 ${M_PI/2} 0" xyz="0.01 0 0.025"/>
+			<xacro:material_grey/>
+		</visual>
+		<collision>
+			<geometry>
+			<cylinder length=".052" radius=".025"/>
+			</geometry>
+		</collision>
+	</link>
+	<joint name="usb_cam_joint" type="fixed">
+    		<parent link="pt_usb_mount"/>
+    		<child link="usb_cam"/>
+		<origin rpy="0 0 0.0" xyz="0 0 0.08"/>
+  	</joint>
+	
+  </xacro:macro>
+  
+</robot>
